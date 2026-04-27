@@ -1,0 +1,17 @@
+[project]
+name = "sentinel-coordination"
+version = "0.1.0"
+description = "Lightweight DB-backed coordination primitive with leases and fencing tokens"
+authors = [
+  { name = "Sreejay Reddy", email = "reddysreejay@gmail.com" }
+]
+readme = "README.md"
+requires-python = ">=3.9"
+dependencies = ["psycopg"]
+
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+packages = ["sentinel"]
