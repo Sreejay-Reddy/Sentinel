@@ -1,6 +1,7 @@
 # Sentinel
 
 A lightweight coordination primitive for backend systems.
+Useful for coordinating workers, preventing duplicate jobs, and ensuring safe execution with fencing tokens.
 
 ---
 
@@ -103,15 +104,6 @@ This ensures:
 
 ---
 
-## Use Cases
-
-* Background workers
-* Job queues
-* Payment processing
-* Idempotent APIs
-
----
-
 ## Status
 
 ⚠️ Beta (v0.1.0)
@@ -123,7 +115,26 @@ This ensures:
 * No retries yet
 * No async support
 * TTL tuning required
-* External side effects must be handled separately
+
+### Long-running / stuck jobs
+
+The `lease()` helper maintains ownership via continuous heartbeats.
+
+If a job:
+
+* hangs
+* enters an infinite loop
+* or gets stuck without crashing
+
+it will continue renewing the lease indefinitely.
+
+This prevents other workers from taking over.
+
+**Recommendation:**
+
+* Set appropriate timeouts at the application level
+* Avoid unbounded blocking operations
+* Consider external watchdogs for critical workflows
 
 ---
 

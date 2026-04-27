@@ -1,6 +1,6 @@
 [project]
 name = "sentinel-coordination"
-version = "0.1.0"
+version = "0.1.1"
 description = "Lightweight DB-backed coordination primitive with leases and fencing tokens"
 authors = [
   { name = "Sreejay Reddy", email = "reddysreejay@gmail.com" }
