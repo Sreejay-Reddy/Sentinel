@@ -7,7 +7,7 @@ authors = [
 ]
 readme = "README.md"
 requires-python = ">=3.9"
-dependencies = ["psycopg"]
+dependencies = ["psycopg[binary]"]
 
 [build-system]
 requires = ["setuptools>=61.0"]

@@ -6,11 +6,6 @@ class AcquireResult:
         self.expires_at = expires_at
         self.fencing_token = fencing_token
 
-class ReleaseResult:
-    def __init__(self, released):
-        self.released = released
-
-class HeartBeatResult:
-    def __init__(self, extended):
-        self.extended = extended
-        
+class OperationResult:
+    def __init__(self, success: bool):
+        self.success = success
