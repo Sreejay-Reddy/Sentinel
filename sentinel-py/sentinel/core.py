@@ -10,48 +10,39 @@ def acquire(conn, key, *, owner_id=None, ttl_ms=10000):
 
     with conn.cursor() as cur:
         cur.execute("""
-        UPDATE sentinel_leases
+        INSERT INTO sentinel_leases (
+            key,
+            owner_id,
+            lease_expires_at,
+            fencing_token
+        )
+        VALUES (
+            %s,
+            %s,
+            NOW() + (%s * INTERVAL '1 millisecond'),
+            nextval('sentinel_token_seq')
+        )
+        ON CONFLICT (key)
+        DO UPDATE
         SET
-            owner_id = %s,
-            lease_expires_at = NOW() + (%s * INTERVAL '1 millisecond'),
+            owner_id = EXCLUDED.owner_id,
+            lease_expires_at = EXCLUDED.lease_expires_at,
             fencing_token = nextval('sentinel_token_seq')
-        WHERE
-            key = %s
-            AND lease_expires_at < NOW()
+        WHERE sentinel_leases.lease_expires_at < NOW()
         RETURNING owner_id, lease_expires_at, fencing_token;
-        """, (owner_id, ttl_ms, key))
+        """, (key, owner_id, ttl_ms))
 
         result = cur.fetchone()
 
-        if result:
+        if result is not None:
             row = row_to_dict(cur, result)
-
-        if not result:
-            cur.execute("""
-            INSERT INTO sentinel_leases (
-                key,
-                owner_id,
-                lease_expires_at,
-                fencing_token
-            )
-            VALUES (
-                %s,
-                %s,
-                NOW() + (%s * INTERVAL '1 millisecond'),
-                nextval('sentinel_token_seq')
-            )
-            ON CONFLICT (key) DO NOTHING
-            RETURNING owner_id, lease_expires_at, fencing_token;
-            """,(key, owner_id, ttl_ms))
-
-            result = cur.fetchone()
-
-            if result:
-                row = row_to_dict(cur, result)
 
     conn.commit()
 
-    if row:
+    if row is not None and row["fencing_token"] is None:
+        raise Exception("Invariant violation: fencing_token is None")
+
+    if row is not None:
         return AcquireResult(
             acquired=True,
             owner_id=row["owner_id"],
