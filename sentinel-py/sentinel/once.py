@@ -1,6 +1,7 @@
 from .core import (
     acquire,
     heartbeat,
+    start_execution,
     complete
 )
 
@@ -10,6 +11,7 @@ from .helper import (
 )
 
 from .heartbeat_config import get_manager
+from .logging import logger
 from .reconciliation import Reconcile
 from .result import OnceResult
 
@@ -63,11 +65,19 @@ class Once:
                     )
 
                 # Executing state requires reconciliation
-                if acquired.status == "executing":
+                if acquired.status == "executing" and not acquired.lease_alive:
                     return OnceResult(
                         success=False,
                         status="executing",
+                        execution_alive=False,
                         reconcile=self.reconcile
+                    )
+                
+                if acquired.status == "executing" and acquired.lease_alive:
+                    return OnceResult(
+                        success=False,
+                        status="executing",
+                        execution_alive=True,
                     )
 
                 return OnceResult(
@@ -101,12 +111,12 @@ class Once:
             if not validated.success:
                 return OnceResult(
                     success=False,
-                    status=validated.status,
-                    reconcile=self.reconcile
+                    status=validated.status
                 )
 
             # Enter execution boundary
-            started = self.reconcile.start_execution(
+            started = start_execution(
+                conn,
                 self.key,
                 owner_id=acquired.owner_id,
                 fencing_token=acquired.fencing_token
@@ -115,8 +125,7 @@ class Once:
             if not started.success:
                 return OnceResult(
                     success=False,
-                    status=started.status,
-                    reconcile=self.reconcile
+                    status=started.status
                 )
 
             # Execute user function
@@ -124,9 +133,16 @@ class Once:
                 response = self.fn()
 
             except Exception as e:
+                logger.exception(
+                    "Execution terminated with an exception after execution started. "
+                    "Side effects may have partially completed. "
+                    "Manual reconciliation may be required."
+                )
+
                 return OnceResult(
                     success=False,
                     status="executing",
+                    execution_alive=False,
                     exception=e,
                     reconcile=self.reconcile
                 )
@@ -141,6 +157,11 @@ class Once:
             )
 
             if not completed.success:
+                logger.warning(
+                    "Execution completed but could not be canonically finalized. "
+                    "Execution outcome may require reconciliation."
+                )
+
                 return OnceResult(
                     success=False,
                     status=completed.status,
@@ -155,7 +176,10 @@ class Once:
             )
 
         finally:
-            conn.close()
+            try:
+                conn.close()
+            except Exception:
+                logger.exception("Could not close db connection")
             if self._task and manager:
                 manager.deregister(self._task)
                 self._task = None

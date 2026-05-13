@@ -37,7 +37,7 @@ def acquire(conn, key, *, owner_id=None, ttl_ms=10000, hard_ttl_ms = None):
             hard_expires_at = EXCLUDED.hard_expires_at,
             fencing_token = nextval('sentinel_token_seq')
         WHERE sentinel_leases.lease_expires_at < NOW() AND sentinel_leases.status = 'claimed'
-        RETURNING owner_id, lease_expires_at, fencing_token, status;
+        RETURNING owner_id, lease_expires_at, fencing_token, status, lease_expires_at > NOW() AS lease_alive;
         """, (key, owner_id, ttl_ms, hard_ttl_ms))
 
         result = cur.fetchone()
@@ -55,13 +55,14 @@ def acquire(conn, key, *, owner_id=None, ttl_ms=10000, hard_ttl_ms = None):
             acquired=True,
             owner_id=row["owner_id"],
             expires_at=row["lease_expires_at"],
+            lease_alive=row["lease_alive"],
             fencing_token=row["fencing_token"],
             status=row["status"]
         )
     
     with conn.cursor() as cur:
         cur.execute("""
-        SELECT owner_id, lease_expires_at, fencing_token, status
+        SELECT owner_id, lease_expires_at, fencing_token, status, lease_expires_at > NOW() AS lease_alive
         FROM sentinel_leases
         WHERE key = %s
         """, (key,))
@@ -77,6 +78,7 @@ def acquire(conn, key, *, owner_id=None, ttl_ms=10000, hard_ttl_ms = None):
         return AcquireResult(acquired=False,
             owner_id=row["owner_id"],
             expires_at=row["lease_expires_at"],
+            lease_alive=row["lease_alive"],
             fencing_token=row["fencing_token"],
             status=row["status"])
 
