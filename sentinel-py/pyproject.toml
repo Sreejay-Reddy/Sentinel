@@ -1,7 +1,7 @@
 [project]
 name = "sentinel-coordination"
 version = "0.2.0"
-description = "Lightweight DB-backed coordination primitive with leases and fencing tokens"
+description = "Execution coordination primitive with leases, fencing tokens, and reconciliation semantics."
 authors = [
   { name = "Sreejay Reddy", email = "reddysreejay@gmail.com" }
 ]

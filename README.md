@@ -51,6 +51,7 @@ Sentinel coordinates *execution*. What happens inside that execution, whether yo
 
 Sentinel lives at the boundary between work arriving and work executing, after your queue or stream delivers an event, and before your code touches the outside world.
 
+```text
 Kafka / SQS / Flink
         ↓
   event delivered
@@ -60,6 +61,7 @@ Kafka / SQS / Flink
         ↓
   side effect runs
   (charge card, send email, write DB, call API)
+```
 
 Kafka can guarantee exactly-once delivery to your consumer. It cannot guarantee exactly-once execution of what your consumer does next. Sentinel closes that gap.
 
