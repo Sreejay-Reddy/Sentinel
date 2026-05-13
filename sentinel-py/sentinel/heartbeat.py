@@ -1,5 +1,6 @@
 import threading
 import time
+from .logging import logger
 
 class HeartbeatTask:
     def __init__(self, key, fn, args, ttl_ms):
@@ -85,10 +86,11 @@ class HeartbeatManager:
                                 self.deregister(task)
 
                     except Exception:
+                        logger.exception("Heartbeat task failed")
                         try:
                             conn.close()
-                        except:
-                            pass
+                        except Exception:
+                            logger.exception("Could not close db connection")
 
                         conn = self.get_conn()
 
@@ -99,5 +101,5 @@ class HeartbeatManager:
         finally:
             try:
                 conn.close()
-            except:
-                pass
+            except Exception:
+                logger.exception("Could not close db connection")

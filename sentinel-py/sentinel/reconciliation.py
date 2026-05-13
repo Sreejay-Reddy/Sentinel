@@ -6,10 +6,7 @@ class Reconcile:
         self.get_conn = get_conn
         self.namespace = namespace
 
-    def _key(self, key):
-        return f"{self.namespace}:{key}" if self.namespace else key
-
-    def start_execution(self, key, *, owner_id, fencing_token):
+    def reconcile(self, key, *, owner_id, fencing_token):
         conn = self.get_conn()
 
         try:
@@ -17,12 +14,13 @@ class Reconcile:
                 cur.execute("""
                 UPDATE sentinel_leases
                 SET
-                    status = 'executing',
+                    status = 'reconciling',
                     lease_updated_at = NOW()
                 WHERE key = %s
                   AND owner_id = %s
                   AND fencing_token = %s
-                  AND status = 'claimed'
+                  AND status = 'executing'
+                  AND lease_expires_at < NOW()
                 RETURNING 1;
                 """, (key, owner_id, fencing_token))
 
@@ -56,7 +54,7 @@ class Reconcile:
                 WHERE key = %s
                   AND owner_id = %s
                   AND fencing_token = %s
-                  AND status = 'executing'
+                  AND status = 'reconciling'
                 RETURNING 1;
                 """, (
                     execution_result,
@@ -93,7 +91,7 @@ class Reconcile:
                 WHERE key = %s
                   AND owner_id = %s
                   AND fencing_token = %s
-                  AND status = 'executing'
+                  AND status = 'reconciling'
                 RETURNING 1;
                 """, (
                     key,

@@ -8,7 +8,7 @@ CREATE TABLE IF NOT EXISTS sentinel_leases (
     lease_updated_at TIMESTAMP,
     hard_expires_at TIMESTAMP,
     execution_result JSONB,
-    status TEXT NOT NULL DEFAULT 'claimed' CHECK (status IN ('claimed','executing','completed')),
+    status TEXT NOT NULL DEFAULT 'claimed' CHECK (status IN ('claimed','executing','completed','reconciling')),
     fencing_token BIGINT NOT NULL DEFAULT 1
 );
 
