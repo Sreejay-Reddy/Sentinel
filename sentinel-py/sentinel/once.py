@@ -23,13 +23,17 @@ class Once:
         key,
         fn,
         ttl_ms,
-        hard_ttl_ms
+        hard_ttl_ms,
+        kwargs=None,
+        owns_connection=True,
     ):
         self.get_conn = get_conn
         self.key = key
         self.fn = fn
         self.ttl_ms = ttl_ms
         self.hard_ttl_ms = hard_ttl_ms
+        self.kwargs = kwargs or {}
+        self.owns_connection = owns_connection
 
         self.reconcile = Reconcile(get_conn)
         self._task = None
@@ -59,6 +63,7 @@ class Once:
                     return OnceResult(
                         success=True,
                         status="completed",
+                        uncertain=False,
                         response=cached["response"]
                         if cached is not None else None,
                         cached=True
@@ -69,6 +74,7 @@ class Once:
                     return OnceResult(
                         success=False,
                         status="executing",
+                        uncertain=True,
                         execution_alive=False,
                         reconcile=self.reconcile
                     )
@@ -78,6 +84,7 @@ class Once:
                         success=False,
                         status="executing",
                         execution_alive=True,
+                        uncertain=False
                     )
 
                 return OnceResult(
@@ -130,7 +137,7 @@ class Once:
 
             # Execute user function
             try:
-                response = self.fn()
+                response = self.fn(**self.kwargs)
 
             except Exception as e:
                 logger.exception(
@@ -143,6 +150,7 @@ class Once:
                     success=False,
                     status="executing",
                     execution_alive=False,
+                    uncertain=True,
                     exception=e,
                     reconcile=self.reconcile
                 )
@@ -165,6 +173,7 @@ class Once:
                 return OnceResult(
                     success=False,
                     status=completed.status,
+                    uncertain=True,
                     reconcile=self.reconcile
                 )
 
@@ -172,12 +181,14 @@ class Once:
                 success=True,
                 status="completed",
                 response=response,
+                uncertain=False,
                 cached=False
             )
 
         finally:
             try:
-                conn.close()
+                if self.owns_connection:
+                    conn.close()
             except Exception:
                 logger.exception("Could not close db connection")
             if self._task and manager:
