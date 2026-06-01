@@ -22,7 +22,8 @@ class OnceResult:
         cached=False,
         exception=None,
         reconcile=None,
-        execution_alive=None
+        execution_alive=None,
+        uncertain=False
     ):
         self.success = success
         self.status = status
@@ -31,3 +32,4 @@ class OnceResult:
         self.exception = exception
         self.reconcile = reconcile
         self.execution_alive = execution_alive
+        self.uncertain = uncertain

@@ -3,20 +3,22 @@ import time
 from .logging import logger
 
 class HeartbeatTask:
-    def __init__(self, key, fn, args, ttl_ms):
+    def __init__(self, key, fn, args, ttl_ms, owns_connection=True):
         self.key = key
         self.fn = fn
         self.args = args
+        self.owns_connection = owns_connection
 
         self.interval = (ttl_ms / 1000.0) / 3
         self.next_heartbeat_at = time.time() + self.interval
 
 
 class HeartbeatManager:
-    def __init__(self, get_conn, num_threads=3):
+    def __init__(self, get_conn, owns_connection=True, num_threads=3):
         self.get_conn = get_conn
         self.num_threads = num_threads
         self.buckets = {i: set() for i in range(num_threads)}
+        self.owns_connection = owns_connection
 
         self.threads = []
         self.running = False
@@ -88,7 +90,8 @@ class HeartbeatManager:
                     except Exception:
                         logger.exception("Heartbeat task failed")
                         try:
-                            conn.close()
+                            if self.owns_connection:
+                                conn.close()
                         except Exception:
                             logger.exception("Could not close db connection")
 
@@ -100,6 +103,7 @@ class HeartbeatManager:
 
         finally:
             try:
-                conn.close()
+                if self.owns_connection:
+                    conn.close()
             except Exception:
                 logger.exception("Could not close db connection")
