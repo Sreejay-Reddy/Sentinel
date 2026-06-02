@@ -72,7 +72,7 @@ class Reconcile:
         finally:
             conn.close()
 
-    def reset_to_claimed(
+    def reset(
         self,
         key,
         *,

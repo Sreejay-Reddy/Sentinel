@@ -1,95 +1,12 @@
 # Sentinel
 
-Distributed execution is hard to get right. Workers crash mid-flight. Retries overlap. Processes freeze while holding a lock. Side effects partially succeed and leave you guessing.
+Not all work is safe to retry.
 
-Most tools respond to this by pretending it isn't a problem — they retry silently, hide uncertainty, and hope the work was idempotent. Sentinel doesn't. It gives you a coordination layer built around an honest model of what can go wrong, and explicit tools for handling it when it does.
+Payments, webhooks, startup jobs, long-running operations and other correctness-sensitive operations often need stronger guarantees than "just run it again."
 
-At its core, Sentinel is a PostgreSQL-backed execution primitive that guarantees **one active execution generation at a time**, rejects stale workers with fencing tokens, and surfaces uncertain outcomes instead of burying them.
+Sentinel is a PostgreSQL-backed execution coordination primitive that provides execution ownership, cached result replay, heartbeat-backed liveness, fencing tokens, and explicit handling of uncertain execution outcomes.
 
----
-
-## Philosophy
-
-The dominant pattern in distributed task execution is optimistic: assume work is safe to retry, hide failures behind automatic replays, and let the application figure out the mess when duplicates show up downstream.
-
-That works until it doesn't. And when it doesn't, you're debugging a payment that charged twice, an invoice that sent three times, or a downstream system in an inconsistent state you can't easily reconstruct.
-
-Sentinel starts from a different assumption: **some work is not safe to replay, and your coordination layer should know the difference.**
-
-When a worker crashes mid-execution, Sentinel doesn't guess. It marks the execution state as uncertain and hands that back to you. You decide whether to reset and retry, force-complete, or escalate. That's not a limitation — that's the correct behavior for correctness-sensitive systems.
-
-A few things Sentinel will never do:
-
-- Silently replay work it can't verify completed
-- Pretend uncertainty doesn't exist to give you a cleaner API
-- Guarantee something it can't actually guarantee
-
-If that trade-off doesn't fit your use case, if your work is truly idempotent and automatic retries are fine — Sentinel may be more ceremony than you need. It's worth being honest about that.
-
----
-
-## What Sentinel Is Good At
-
-- Payment processing and financial operations
-- Webhook ingestion and deduplication
-- Distributed task ownership across competing workers
-- Long-running jobs where you need heartbeat-backed liveness
-- Workflows where the cost of a duplicate is higher than the cost of a manual reconciliation
-
-## What Sentinel Is Not
-
-- A general-purpose task queue (use Celery, Dramatiq, or similar)
-- A distributed transaction system
-- A guarantee against duplicate side effects in downstream services
-- A replacement for idempotency keys at the API layer
-
-Sentinel coordinates *execution*. What happens inside that execution, whether your database write is transactional, whether your API call is idempotent is still your responsibility.
-
----
-
-## Where Sentinel Fits
-
-Sentinel lives at the boundary between work arriving and work executing, after your queue or stream delivers an event, and before your code touches the outside world.
-
-```text
-Kafka / SQS / Flink
-        ↓
-  event delivered
-  to your worker
-        ↓
-     Sentinel         ← coordination happens here
-        ↓
-  side effect runs
-  (charge card, send email, write DB, call API)
-```
-
-Kafka can guarantee exactly-once delivery to your consumer. It cannot guarantee exactly-once execution of what your consumer does next. Sentinel closes that gap.
-
-If your worker crashes after Kafka commits the offset but before the payment goes through, Kafka considers the job done. Sentinel is what catches it.
-
----
-
-## Why Not Just Use...
-
-**Temporal**
-
-Temporal is a full workflow engine. It manages retries, timelines, activity state, and long-running saga orchestration. It's powerful and the right tool for complex multi-step workflows.
-
-Sentinel is not that. It's a single primitive — coordinate execution of one unit of work, surface the outcome honestly. No workflow DSL, no activity workers, no server to operate. If you're already running Temporal, Sentinel is probably redundant. If you just need to ensure a payment handler doesn't double-execute, Temporal is a lot of infrastructure for a narrow problem.
-
-**Kafka**
-
-Kafka is a durable distributed log. It solves delivery and ordering. It does not solve execution. Sentinel is what you reach for after Kafka has done its job — when the message is in your worker and you need to guarantee what happens next.
-
-**etcd / ZooKeeper**
-
-Both are distributed coordination systems built for infrastructure concerns, leader election, cluster membership, service discovery. They're designed to be run as part of your platform, not called from application code. Using etcd for execution coordination means building the lease model, fencing tokens, and execution state tracking yourself on top of a general-purpose primitive. Sentinel is that layer already built, opinionated, and pointed at application-level execution rather than infrastructure coordination.
-
-**Redis (SETNX / Redlock)**
-
-Redis-based locking is common and fast. It also has well-documented failure modes, Redlock in particular has been the subject of serious distributed systems criticism around clock skew and network partition behavior. More importantly, Redis locks give you mutual exclusion but not execution state. You still have to model claimed vs executing vs completed yourself, and you still have to handle the uncertain outcome when a lock expires mid-execution. Sentinel does all of that. Redis support is on the roadmap as a backend option, but the coordination semantics will remain the same.
-
-**The honest version:** Sentinel is an opinionated, lightweight primitive that makes one specific bet — that explicit uncertainty handling is worth more than automatic retries for correctness-sensitive work. If that bet fits your problem, it's significantly less infrastructure than the alternatives. If it doesn't, use something else.
+Sentinel's primary interface is `once()`, which coordinates execution across competing workers and replays completed results to subsequent callers.
 
 ---
 
@@ -139,13 +56,24 @@ sentinel = Sentinel(
 `sentinel.once()` is the primary interface. Given a key and a function, it guarantees that function runs **at most once per key** across any number of competing workers and returns the cached result to anyone else who asks.
 
 ```python
-def process_payment():
-    charge_card(amount=99_00, customer_id="cus_abc")
-    return {"ok": True, "payment_id": "pay_123"}
+def process_payment(amount, customer_id):
+    charge_card(
+        amount=amount,
+        customer_id=customer_id
+    )
+
+    return {
+        "ok": True,
+        "payment_id": "pay_123"
+    }
 
 result = sentinel.once(
     key="payment-order-789",
     fn=process_payment,
+    kwargs={
+        "amount": 99_00,
+        "customer_id": "cus_abc"
+    },
     ttl_ms=3000,
     hard_ttl_ms=30000
 )
@@ -154,101 +82,41 @@ result = sentinel.once(
 ### Reading the result
 
 ```python
-if result.success:
-    # Execution completed. result.response has your return value.
-    print(result.response)
+result = sentinel.once(...)
 
-elif result.cached:
-    # A previous worker already completed this. Same result, no re-execution.
-    print("Already done:", result.response)
+if result.execution_alive:
+    # Another worker is actively executing.
 
-elif result.status == "executing" and result.execution_alive:
-    print("Execution currently in progress")
+elif result.uncertain:
+    # Execution truth could not be established.
+    # Use reconciliation tooling if needed.
 
-elif result.status == "executing" and not result.execution_alive:
-    # A worker claimed this and hasn't finished. We don't know the outcome.
-    # Don't retry blindly. Read the reconciliation section below.
-    print("Execution outcome uncertain — reconciliation required")
+else:
+    # If execution_alive and uncertain are both False,
+    # response contains either a newly completed result
+    # or a cached result from a previous execution.
+    return result.response
 ```
 
-### Why `result.status == "executing"` matters
-
-This is the state most systems hide from you. It surfaces when a worker claimed execution, entered the side-effect zone, and then disappeared, crashed, froze, timed out. The work may have completed. It may have half-completed. Sentinel doesn't know, and it won't pretend otherwise.
-
-What you do with that is up to you. That's the point.
-
 ---
 
-## Execution States
+## Django
 
-Every execution tracked by Sentinel moves through four states:
+Install the app and run migrations:
 
-| State | Meaning |
-|---|---|
-| `claimed` | Work has been claimed. Execution hasn't started. Safe to reset and retry. |
-| `executing` | Execution has started. Side effects may be in flight. Replay is potentially unsafe. |
-| `completed` | Execution finished. Result is cached and reusable. |
-| `reconciling` | Execution entered recovery mode. Automatic progress is blocked until reconciliation resolves execution truth. |
+```bash
+python manage.py migrate
+```
 
-The `claimed` → `executing` transition is the important one. Before that boundary, a reset is safe. After it, you're in uncertain territory and Sentinel will tell you so.
-
----
-
-## Reconciliation
-
-When execution ends up in an uncertain state, Sentinel gives you explicit tools to resolve it rather than forcing a guess.
+Then use Sentinel directly:
 
 ```python
-# reconcile — sets state to reconciling, force_complete and reset_to_claimed can only be used after setting state to reconciling
-sentinel.reconcile.reconcile(key="payment-order-789")
+from sentinel import Sentinel
 
-# Mark as complete with a known result — use when you can verify externally
-sentinel.reconcile.force_complete(key="payment-order-789", response={"ok": True})
-
-# Manually advance to executing — for custom recovery flows
-sentinel.reconcile.reset_to_claimed(key="payment-order-789")
+sentinel = Sentinel()
 ```
 
-The typical reconciliation pattern:
-
-1. Detect `status == "executing"` on a result
-2. Use `reconcile` to start reconciliation
-3. Check your downstream system (did the payment go through?)
-4. If yes: `force_complete` with the known result
-5. If no or unknown: `reset_to_claimed` and let it retry
-
-This is more work than a silent retry. It's also the only approach that doesn't risk charging a customer twice.
-
----
-
-## Leases
-
-If you need lower-level coordination without the full execution lifecycle, the lease API gives you a distributed mutex with heartbeat renewal and fencing token protection.
-
-```python
-with sentinel.lease(
-    key="invoice-123",
-    ttl_ms=3000,
-    hard_ttl_ms=30000
-) as lease:
-
-    if lease is None:
-        print("Already held by another worker")
-        return
-
-    # Lease is held. Heartbeats renew it automatically up to hard_ttl_ms.
-    do_work()
-```
-
-Leases are useful when you want coordination without tracking execution state, for example, ensuring only one worker processes a polling loop at a time.
-
----
-
-## Fencing Tokens
-
-Every lease acquisition generates a monotonically increasing fencing token. Sentinel uses this to reject stale workers, if a worker pauses (GC, network partition, slow disk) and comes back after its lease has expired and been re-acquired by someone else, its operations will be rejected.
-
-This protects against a class of bugs that are easy to miss: the worker that thinks it still holds the lease but doesn't.
+Sentinel automatically detects Django and uses Django's configured database connection.
 
 ---
 
@@ -302,27 +170,13 @@ Sentinel makes specific choices that won't suit everyone.
 
 ## Known Failure Boundaries
 
-Sentinel intentionally prevents automatic re-execution once work has crossed the execution boundary.
+If a worker enters the executing state and disappears before completion, Sentinel will not automatically replay the work.
 
-If a worker enters the `executing` state and then crashes, freezes, loses heartbeat authority, or disappears before canonical completion occurs, Sentinel will not automatically restart the work, even after the lease expires.
+At that point Sentinel cannot safely determine whether the side effect completed, partially completed, or never completed.
 
-This is intentional.
+Instead, Sentinel surfaces the outcome as uncertain and requires explicit reconciliation.
 
-At that point, Sentinel cannot safely determine whether the side effect:
-- fully completed,
-- partially completed,
-- or never completed at all.
-
-Instead of risking duplicate execution, Sentinel preserves the execution state and requires explicit reconciliation.
-
-This creates an important tradeoff:
-
-- Sentinel prevents overlapping or duplicate authoritative execution
-- But uncertain execution outcomes may require reconciliation logic before progress can continue
-
-This is why expired `executing` states surface as reconciliation-required rather than automatically resetting back to `claimed`.
-
-Sentinel chooses correctness of execution authority over automatic replay.
+Sentinel chooses correctness over automatic replay.
 
 ---
 
@@ -334,12 +188,13 @@ Sentinel is early-stage software under active development. The core execution se
 
 ## Roadmap
 
-- Retry support with configurable backoff
-- Redis-backed coordination
+- Redis cache for better throughput 
 - Async support
 - Append-only execution logs
 - Stronger reconciliation tooling
 - Metrics and observability hooks
+- Framework integrations
+- Additional language support
 
 ---
 
