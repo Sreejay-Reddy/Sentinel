@@ -16,5 +16,5 @@ django = ["django>=4.2"]
 requires = ["setuptools>=61.0"]
 build-backend = "setuptools.build_meta"
 
-[tool.setuptools.packages.find]
-where = ["sentinel-py"]
+[tool.setuptools]
+packages = ["sentinel", "sentinel.integrations"]
