@@ -153,12 +153,32 @@ def heartbeat(conn, key, owner_id, fencing_token, ttl_ms=5000):
         cur.execute("""
         UPDATE sentinel_leases
         SET lease_expires_at = NOW() + (%s * INTERVAL '1 millisecond')
-        WHERE key = %s AND owner_id = %s AND fencing_token = %s AND hard_expires_at > NOW()
+        WHERE key = %s 
+            AND owner_id = %s 
+            AND fencing_token = %s 
+            AND hard_expires_at > NOW()
+            AND status = 'executing'
         RETURNING 1;
         """, (ttl_ms, key, owner_id, fencing_token))
 
         success = cur.fetchone() is not None
 
+    conn.commit()
+    return OperationResult(success)
+
+def expire_lease(conn, key, *, owner_id, fencing_token):
+    with conn.cursor() as cur:
+        cur.execute("""
+        UPDATE sentinel_leases
+        SET hard_expires_at = NOW(),
+            lease_expires_at = NOW()
+        WHERE key = %s
+            AND owner_id = %s
+            AND fencing_token = %s
+            AND status = 'executing'
+        RETURNING 1;
+        """, (key, owner_id, fencing_token))
+        success = cur.fetchone() is not None
     conn.commit()
     return OperationResult(success)
 

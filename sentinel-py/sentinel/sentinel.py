@@ -3,24 +3,19 @@ from .once import Once
 from .heartbeat_config import get_manager
 
 class Sentinel:
-    def __init__(self, get_conn = None, default_ttl_ms=3000, namespace=None):
+    def __init__(self, get_conn = None, default_ttl_ms=3000, namespace=None, owns_connection=True):
         self.default_ttl_ms = default_ttl_ms
         self.namespace = namespace
         self.integration = None
+        self.owns_connection = owns_connection 
 
         if get_conn:
             self.get_conn = get_conn
-
-        elif self._django_detected():
-            self.integration = "django"
-            self.get_conn = self._django_connection
 
         else:
             raise ValueError(
                 "No database connection provider found."
             )
-        
-        self.owns_connection = self.integration != "django"
 
         self.manager = get_manager(
             self._conn,
@@ -40,28 +35,13 @@ class Sentinel:
 
     def _key(self, key):
         return f"{self.namespace}:{key}" if self.namespace else key
-    
-    def _django_detected(self):
-        try:
-            from django.conf import settings
-            return settings.configured
-        except Exception:
-            return False
         
-    def _django_connection(self):
-        from django.db import connections
+    # def lease(self, key, ttl_ms=None, hard_ttl_ms=None):
+    #     key = self._key(key)
+    #     ttl = self._ttl(ttl_ms)
+    #     hard_ttl = self._hard_ttl(ttl,hard_ttl_ms)
 
-        conn = connections["default"]
-        conn.ensure_connection()
-
-        return conn.connection
-        
-    def lease(self, key, ttl_ms=None, hard_ttl_ms=None):
-        key = self._key(key)
-        ttl = self._ttl(ttl_ms)
-        hard_ttl = self._hard_ttl(ttl,hard_ttl_ms)
-
-        return Lease(None, key, ttl, hard_ttl, self._conn)
+    #     return Lease(None, key, ttl, hard_ttl, self._conn)
     
     def once(self, key, fn, ttl_ms=None, hard_ttl_ms=None, kwargs=None):
         key = self._key(key)

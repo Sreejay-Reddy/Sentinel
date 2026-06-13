@@ -2,7 +2,8 @@ from .core import (
     acquire,
     heartbeat,
     start_execution,
-    complete
+    complete,
+    expire_lease
 )
 
 from .helper import (
@@ -91,20 +92,6 @@ class Once:
                     success=False,
                     status=acquired.status
                 )
-            
-            manager = get_manager()
-
-            self._task = manager.register(
-                key=self.key,
-                fn=heartbeat,
-                args=(
-                    self.key,
-                    acquired.owner_id,
-                    acquired.fencing_token,
-                    self.ttl_ms
-                ),
-                ttl_ms=self.ttl_ms
-            )
 
             # Tighten authority before execution
             validated = validate_and_extend(
@@ -134,6 +121,20 @@ class Once:
                     success=False,
                     status=started.status
                 )
+            
+            manager = get_manager()
+
+            self._task = manager.register(
+                key=self.key,
+                fn=heartbeat,
+                args=(
+                    self.key,
+                    acquired.owner_id,
+                    acquired.fencing_token,
+                    self.ttl_ms
+                ),
+                ttl_ms=self.ttl_ms
+            )
 
             # Execute user function
             try:
@@ -145,6 +146,16 @@ class Once:
                     "Side effects may have partially completed. "
                     "Manual reconciliation may be required."
                 )
+
+                try:
+                    expire_lease(
+                        conn,
+                        self.key,
+                        owner_id=acquired.owner_id,
+                        fencing_token=acquired.fencing_token
+                    )
+                except Exception:
+                    logger.exception("Could not expire lease after fn() failure")
 
                 return OnceResult(
                     success=False,
