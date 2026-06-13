@@ -1,6 +1,6 @@
 [project]
 name = "sentinel-coordination"
-version = "0.3.0"
+version = "0.3.1"
 description = "PostgreSQL-backed execution coordination primitive for correctness-sensitive distributed work."
 authors = [
   { name = "Sreejay Reddy", email = "reddysreejay@gmail.com" }
@@ -16,5 +16,5 @@ django = ["django>=4.2"]
 requires = ["setuptools>=61.0"]
 build-backend = "setuptools.build_meta"
 
-[tool.setuptools]
-packages = ["sentinel"]
+[tool.setuptools.packages.find]
+packages = ["sentinel-py"]
