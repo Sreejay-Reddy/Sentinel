@@ -102,21 +102,21 @@ else:
 
 ## Django
 
-Install the app and run migrations:
+Install the Django optional dependency:
 
 ```bash
-python manage.py migrate
+pip install sentinel-coordination[django]
 ```
 
-Then use Sentinel directly:
+Then use DjangoSentinel directly:
 
 ```python
-from sentinel import Sentinel
+from sentinel.integrations.django import DjangoSentinel
 
-sentinel = Sentinel()
+sentinel = DjangoSentinel()
 ```
 
-Sentinel automatically detects Django and uses Django's configured database connection.
+DjangoSentinel uses Django's configured database connection and respects Django's connection lifecycle.
 
 ---
 

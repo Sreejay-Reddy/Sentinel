@@ -1,3 +1,11 @@
+try:
+    import django
+except ImportError:
+    raise ImportError(
+        "DjangoSentinel requires Django. "
+        "Install it with: pip install sentinel-coordination[django]"
+    )
+
 from ..sentinel import Sentinel
 
 def _get_django_conn():
