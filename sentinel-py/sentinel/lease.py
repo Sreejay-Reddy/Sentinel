@@ -1,3 +1,4 @@
+# Purely experimental and early implementation currently not exposed in client
 from sentinel.core import acquire, heartbeat, release
 from sentinel.heartbeat_config import get_manager
 
