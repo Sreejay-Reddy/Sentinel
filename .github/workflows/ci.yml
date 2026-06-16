@@ -35,10 +35,10 @@ jobs:
 
       - name: Install dependencies
         run: |
-          pip install psycopg[binary] pytest
+          pip install psycopg[binary] pytest pytest-asyncio
           pip install ./sentinel-py
 
       - name: Run tests
         env:
           PYTHONPATH: sentinel-py
-        run: pytest tests/ -v
+        run: pytest tests/ -v --asyncio-mode=auto
