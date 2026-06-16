@@ -1,4 +1,6 @@
 import pytest
+import asyncio
+import sys
 import psycopg
 from sentinel import init_db
 from sentinel.heartbeat_config import shutdown_manager
@@ -43,3 +45,15 @@ def conn():
 @pytest.fixture
 def get_conn_fixture():
     return get_conn
+
+def pytest_asyncio_loop_factories():
+    if sys.platform == "win32":
+        return {"selector": lambda: asyncio.SelectorEventLoop()}
+    return None
+
+async def get_async_conn():
+    return await psycopg.AsyncConnection.connect(DSN)
+
+@pytest.fixture
+def get_async_conn_fixture():
+    return get_async_conn

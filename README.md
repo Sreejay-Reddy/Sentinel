@@ -189,7 +189,6 @@ Sentinel is early-stage software under active development. The core execution se
 ## Roadmap
 
 - Redis cache for better throughput 
-- Async support
 - Append-only execution logs
 - Stronger reconciliation tooling
 - Metrics and observability hooks
