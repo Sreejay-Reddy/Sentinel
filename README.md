@@ -100,6 +100,43 @@ else:
 
 ---
 
+## Async
+
+If you're working in an async context, use `AsyncSentinel`:
+
+```python
+import psycopg
+from sentinel import AsyncSentinel
+
+async def get_conn():
+    return await psycopg.AsyncConnection.connect("postgresql://...")
+
+sentinel = AsyncSentinel(
+    get_conn=get_conn,
+    default_ttl_ms=3000
+)
+
+result = await sentinel.once(
+    key="payment-order-789",
+    fn=process_payment,
+    kwargs={"amount": 99_00, "customer_id": "cus_abc"},
+    ttl_ms=3000,
+    hard_ttl_ms=30000
+)
+```
+
+`AsyncSentinel` accepts async functions as `fn`. The heartbeat runs on OS threads and does not interfere with the event loop.
+
+For async schema setup:
+
+```python
+from sentinel import async_init_db
+
+await async_init_db(conn)
+```
+
+---
+
 ## Django
 
 Install the Django optional dependency:
@@ -117,6 +154,12 @@ sentinel = DjangoSentinel()
 ```
 
 DjangoSentinel uses Django's configured database connection and respects Django's connection lifecycle.
+
+To use Django migrations instead of `init_db`, add `sentinel.integrations` to `INSTALLED_APPS` and run:
+
+```bash
+python manage.py migrate sentinel.integrations
+```
 
 ---
 
@@ -160,8 +203,6 @@ Sentinel makes specific choices that won't suit everyone.
 
 **Explicit over automatic.** Uncertain states are surfaced, not resolved for you. This is a feature for correctness-sensitive systems and friction for everything else.
 
-**Python only.** No Go client, no multi-language support yet. If your workers are polyglot, you'll need a different solution or a coordination service layer in front of Sentinel. Go client currently on the roadmap.
-
 **No built-in retries.** Sentinel coordinates execution. It doesn't implement retry logic, backoff, or dead-letter queues. You bring those or compose them yourself.
 
 **Not a queue.** Sentinel doesn't dispatch work or schedule tasks. It coordinates execution of work you've already routed to a worker.
@@ -182,14 +223,16 @@ Sentinel chooses correctness over automatic replay.
 
 ## Project Status
 
-Sentinel is early-stage software under active development. The core execution semantics are stabilizing, but APIs and reconciliation flows may evolve as the project matures.
+The core execution semantics are stable as of 0.4.0. Reconciliation tooling and observability APIs will continue to evolve.
 
 ---
 
 ## Roadmap
 
 - Redis cache for better throughput 
-- Append-only execution logs
+- Append-only execution event log (`sentinel_events`)
+- FastAPI integration
+- Correlate — cross-service execution observability
 - Stronger reconciliation tooling
 - Metrics and observability hooks
 - Framework integrations
