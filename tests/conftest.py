@@ -49,7 +49,9 @@ def get_conn_fixture():
 def pytest_asyncio_loop_factories():
     if sys.platform == "win32":
         return {"selector": lambda: asyncio.SelectorEventLoop()}
-    return None
+    
+    # Return a valid loop factory for non-Windows platforms
+    return {"default": lambda: asyncio.new_event_loop()}
 
 async def get_async_conn():
     return await psycopg.AsyncConnection.connect(DSN)
