@@ -104,49 +104,6 @@ def test_once_second_caller_after_failure_sees_uncertain(get_conn_fixture):
     assert r2.execution_alive is False
 
 
-# ─── RECONCILE EXPOSED ──────────────────────────────────────────────────────
-
-def test_once_uncertain_exposes_reconcile(sentinel):
-    def boom():
-        raise ValueError("intentional")
-
-    result = sentinel.once("once:reconcile_exposed", fn=boom, ttl_ms=5000, hard_ttl_ms=10000)
-    assert result.uncertain is True
-    assert result.reconcile is not None
-    assert isinstance(result.reconcile, Reconcile)
-
-
-def test_once_execution_alive_no_reconcile(get_conn_fixture):
-    barrier = threading.Barrier(2)
-    results = []
-
-    def slow_fn():
-        barrier.wait()
-        time.sleep(0.5)
-        return {"done": True}
-
-    def run_first():
-        s = Sentinel(get_conn=get_conn_fixture)
-        results.append(("first", s.once("once:alive", fn=slow_fn, ttl_ms=5000, hard_ttl_ms=10000)))
-
-    def run_second():
-        barrier.wait()
-        time.sleep(0.05)
-        s = Sentinel(get_conn=get_conn_fixture)
-        results.append(("second", s.once("once:alive", fn=slow_fn, ttl_ms=5000, hard_ttl_ms=10000)))
-
-    t1 = threading.Thread(target=run_first)
-    t2 = threading.Thread(target=run_second)
-    t1.start()
-    t2.start()
-    t1.join()
-    t2.join()
-
-    second_result = next(r for label, r in results if label == "second")
-    assert second_result.execution_alive is True
-    assert second_result.reconcile is None
-
-
 # ─── NAMESPACE ──────────────────────────────────────────────────────────────
 
 def test_once_namespace_isolates_keys(get_conn_fixture):

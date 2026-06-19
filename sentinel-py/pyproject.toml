@@ -35,8 +35,12 @@ classifiers = [
 
 license = { file = "LICENSE" }
 
+[project.scripts]
+sen = "sentinel.cli:main"
+
 [project.optional-dependencies]
 django = ["django>=4.2"]
+cli = ["python-dotenv"]
 
 [build-system]
 requires = ["setuptools>=61.0"]

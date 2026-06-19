@@ -1,6 +1,7 @@
 import time
 import pytest
 import pytest_asyncio
+import asyncio
 import psycopg
 from sentinel.async_core import (
     acquire,
@@ -9,6 +10,7 @@ from sentinel.async_core import (
     complete,
     expire_lease,
     release,
+    inspect,
 )
 
 DSN = "postgresql://sentinel_test:sentinel_test@localhost/sentinel_test"
@@ -147,3 +149,100 @@ async def test_async_release_allows_reacquire(aconn):
     await release(aconn, "async:core:release:basic", owner_id=r.owner_id, fencing_token=r.fencing_token)
     r2 = await acquire(aconn, "async:core:release:basic", ttl_ms=5000, hard_ttl_ms=10000)
     assert r2.acquired is True
+
+
+# ─── INSPECT ────────────────────────────────────────────────────────────────
+
+@pytest.mark.asyncio
+async def test_async_inspect_missing_key(aconn):
+    result = await inspect(
+        aconn,
+        "async:inspect:missing",
+    )
+
+    assert result is None
+
+
+@pytest.mark.asyncio
+async def test_async_inspect_executing(aconn):
+    r = await acquire(
+        aconn,
+        "async:inspect:executing",
+        ttl_ms=5000,
+        hard_ttl_ms=10000,
+    )
+
+    await start_execution(
+        aconn,
+        "async:inspect:executing",
+        owner_id=r.owner_id,
+        fencing_token=r.fencing_token,
+    )
+
+    result = await inspect(
+        aconn,
+        "async:inspect:executing",
+    )
+
+    assert result.key == "async:inspect:executing"
+    assert result.status == "executing"
+    assert result.lease_alive is True
+
+
+@pytest.mark.asyncio
+async def test_async_inspect_completed(aconn):
+    r = await acquire(
+        aconn,
+        "async:inspect:completed",
+        ttl_ms=5000,
+        hard_ttl_ms=10000,
+    )
+
+    await start_execution(
+        aconn,
+        "async:inspect:completed",
+        owner_id=r.owner_id,
+        fencing_token=r.fencing_token,
+    )
+
+    await complete(
+        aconn,
+        "async:inspect:completed",
+        execution_result={"ok": True},
+        owner_id=r.owner_id,
+        fencing_token=r.fencing_token,
+    )
+
+    result = await inspect(
+        aconn,
+        "async:inspect:completed",
+    )
+
+    assert result.status == "completed"
+    assert result.execution_result == {"ok": True}
+
+
+@pytest.mark.asyncio
+async def test_async_inspect_expired_execution(aconn):
+    r = await acquire(
+        aconn,
+        "async:inspect:expired",
+        ttl_ms=100,
+        hard_ttl_ms=10000,
+    )
+
+    await start_execution(
+        aconn,
+        "async:inspect:expired",
+        owner_id=r.owner_id,
+        fencing_token=r.fencing_token,
+    )
+
+    await asyncio.sleep(0.2)
+
+    result = await inspect(
+        aconn,
+        "async:inspect:expired",
+    )
+
+    assert result.lease_alive is False

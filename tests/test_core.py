@@ -7,6 +7,7 @@ from sentinel.core import (
     complete,
     expire_lease,
     release,
+    inspect,
 )
 
 
@@ -195,3 +196,84 @@ def test_release_wrong_token_fails(conn):
     assert result.success is False
     r2 = acquire(conn, "core:release:bad_token", ttl_ms=5000, hard_ttl_ms=10000)
     assert r2.acquired is False
+
+
+# ─── INSPECT ────────────────────────────────────────────────────────────────
+
+def test_inspect_missing_key(conn):
+    result = inspect(conn, "inspect:missing")
+
+    assert result is None
+
+
+def test_inspect_executing(conn):
+    r = acquire(
+        conn,
+        "inspect:executing",
+        ttl_ms=5000,
+        hard_ttl_ms=10000,
+    )
+
+    start_execution(
+        conn,
+        "inspect:executing",
+        owner_id=r.owner_id,
+        fencing_token=r.fencing_token,
+    )
+
+    result = inspect(conn, "inspect:executing")
+
+    assert result.key == "inspect:executing"
+    assert result.status == "executing"
+    assert result.lease_alive is True
+
+
+def test_inspect_completed(conn):
+    r = acquire(
+        conn,
+        "inspect:completed",
+        ttl_ms=5000,
+        hard_ttl_ms=10000,
+    )
+
+    start_execution(
+        conn,
+        "inspect:completed",
+        owner_id=r.owner_id,
+        fencing_token=r.fencing_token,
+    )
+
+    complete(
+        conn,
+        "inspect:completed",
+        execution_result={"ok": True},
+        owner_id=r.owner_id,
+        fencing_token=r.fencing_token,
+    )
+
+    result = inspect(conn, "inspect:completed")
+
+    assert result.status == "completed"
+    assert result.execution_result == {"ok": True}
+
+
+def test_inspect_expired_execution(conn):
+    r = acquire(
+        conn,
+        "inspect:expired",
+        ttl_ms=100,
+        hard_ttl_ms=10000,
+    )
+
+    start_execution(
+        conn,
+        "inspect:expired",
+        owner_id=r.owner_id,
+        fencing_token=r.fencing_token,
+    )
+
+    time.sleep(0.2)
+
+    result = inspect(conn, "inspect:expired")
+
+    assert result.lease_alive is False

@@ -1,4 +1,4 @@
-from .lease import Lease
+from .async_reconcilliation import AsyncReconcile
 from .async_once import AsyncOnce
 from .heartbeat_config import get_manager
 
@@ -16,6 +16,8 @@ class AsyncSentinel:
             raise ValueError(
                 "No database connection provider found."
             )
+        
+        self.reconcile = AsyncReconcile(self._conn, namespace=self.namespace)
 
         self.manager = get_manager(
             self._conn,
@@ -35,13 +37,6 @@ class AsyncSentinel:
 
     def _key(self, key):
         return f"{self.namespace}:{key}" if self.namespace else key
-        
-    # def lease(self, key, ttl_ms=None, hard_ttl_ms=None):
-    #     key = self._key(key)
-    #     ttl = self._ttl(ttl_ms)
-    #     hard_ttl = self._hard_ttl(ttl,hard_ttl_ms)
-
-    #     return Lease(None, key, ttl, hard_ttl, self._conn)
     
     async def once(self, key, fn, ttl_ms=None, hard_ttl_ms=None, kwargs=None):
         key = self._key(key)
