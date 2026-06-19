@@ -1,6 +1,6 @@
 import json
 from .utils import get_owner_id, row_to_dict
-from .result import AcquireResult, OperationResult
+from .result import AcquireResult, OperationResult, InspectResult
 
 def acquire(conn, key, *, owner_id=None, ttl_ms=10000, hard_ttl_ms = None):
 
@@ -182,4 +182,30 @@ def expire_lease(conn, key, *, owner_id, fencing_token):
     conn.commit()
     return OperationResult(success)
 
+def inspect(conn, key):
+    with conn.cursor() as cur:
+        cur.execute("""
+        SELECT owner_id, lease_expires_at, fencing_token, status, 
+        lease_expires_at > NOW() AS lease_alive, lease_updated_at,
+        hard_expires_at, execution_result
+        FROM sentinel_leases
+        WHERE key = %s 
+        """, (key,))
 
+        result = cur.fetchone()
+
+        if result is None:
+            return None
+
+        row = row_to_dict(cur, result)
+
+    return InspectResult(
+        key = key,
+        owner_id = row["owner_id"],
+        fencing_token = row["fencing_token"],
+        status = row["status"],
+        lease_alive = row["lease_alive"],
+        lease_expires_at = row["lease_expires_at"],
+        lease_updated_at = row["lease_updated_at"],
+        hard_expires_at = row["hard_expires_at"],
+        execution_result = row["execution_result"])

@@ -13,7 +13,6 @@ from .async_helper import (
 
 from .heartbeat_config import get_manager
 from .logging import logger
-from .async_reconcilliation import AsyncReconcile
 from .result import OnceResult
 
 
@@ -36,7 +35,6 @@ class AsyncOnce:
         self.kwargs = kwargs or {}
         self.owns_connection = owns_connection
 
-        self.reconcile = AsyncReconcile(get_conn)
         self._task = None
 
     async def run(self):
@@ -76,8 +74,7 @@ class AsyncOnce:
                         success=False,
                         status="executing",
                         uncertain=True,
-                        execution_alive=False,
-                        reconcile=self.reconcile
+                        execution_alive=False
                     )
                 
                 if acquired.status == "executing" and acquired.lease_alive:
@@ -162,8 +159,7 @@ class AsyncOnce:
                     status="executing",
                     execution_alive=False,
                     uncertain=True,
-                    exception=e,
-                    reconcile=self.reconcile
+                    exception=e
                 )
 
             # Finalize canonical completion
@@ -184,8 +180,7 @@ class AsyncOnce:
                 return OnceResult(
                     success=False,
                     status=completed.status,
-                    uncertain=True,
-                    reconcile=self.reconcile
+                    uncertain=True
                 )
 
             return OnceResult(

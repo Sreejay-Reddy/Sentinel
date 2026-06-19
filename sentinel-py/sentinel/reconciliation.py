@@ -6,7 +6,7 @@ class Reconcile:
         self.get_conn = get_conn
         self.namespace = namespace
 
-    def reconcile(self, key, *, owner_id, fencing_token):
+    def reconcile(self, key):
         conn = self.get_conn()
 
         try:
@@ -17,12 +17,10 @@ class Reconcile:
                     status = 'reconciling',
                     lease_updated_at = NOW()
                 WHERE key = %s
-                  AND owner_id = %s
-                  AND fencing_token = %s
                   AND status = 'executing'
                   AND lease_expires_at < NOW()
                 RETURNING 1;
-                """, (key, owner_id, fencing_token))
+                """, (key,))
 
                 success = cur.fetchone() is not None
 
@@ -33,14 +31,7 @@ class Reconcile:
         finally:
             conn.close()
 
-    def force_complete(
-        self,
-        key,
-        *,
-        owner_id,
-        fencing_token,
-        execution_result
-    ):
+    def force_complete(self, key, execution_result):
         conn = self.get_conn()
 
         try:
@@ -52,16 +43,9 @@ class Reconcile:
                     execution_result = %s,
                     lease_updated_at = NOW()
                 WHERE key = %s
-                  AND owner_id = %s
-                  AND fencing_token = %s
                   AND status = 'reconciling'
                 RETURNING 1;
-                """, (
-                    execution_result,
-                    key,
-                    owner_id,
-                    fencing_token
-                ))
+                """, (execution_result, key))
 
                 success = cur.fetchone() is not None
 
@@ -72,13 +56,7 @@ class Reconcile:
         finally:
             conn.close()
 
-    def reset(
-        self,
-        key,
-        *,
-        owner_id,
-        fencing_token
-    ):
+    def reset(self, key):
         conn = self.get_conn()
 
         try:
@@ -89,15 +67,9 @@ class Reconcile:
                     status = 'claimed',
                     lease_updated_at = NOW()
                 WHERE key = %s
-                  AND owner_id = %s
-                  AND fencing_token = %s
                   AND status = 'reconciling'
                 RETURNING 1;
-                """, (
-                    key,
-                    owner_id,
-                    fencing_token
-                ))
+                """, (key,))
 
                 success = cur.fetchone() is not None
 

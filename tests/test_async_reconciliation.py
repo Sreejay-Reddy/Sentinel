@@ -27,22 +27,14 @@ async def test_async_reconcile_marks_reconciling(aconn, areconcile):
     r = await acquire(aconn, "async:rec:reconcile:basic", ttl_ms=100, hard_ttl_ms=10000)
     await start_execution(aconn, "async:rec:reconcile:basic", owner_id=r.owner_id, fencing_token=r.fencing_token)
     time.sleep(0.2)
-    result = await areconcile.reconcile("async:rec:reconcile:basic", owner_id=r.owner_id, fencing_token=r.fencing_token)
+    result = await areconcile.reconcile("async:rec:reconcile:basic")
     assert result.success is True
 
 @pytest.mark.asyncio
 async def test_async_reconcile_fails_if_lease_still_alive(aconn, areconcile):
     r = await acquire(aconn, "async:rec:reconcile:alive", ttl_ms=5000, hard_ttl_ms=10000)
     await start_execution(aconn, "async:rec:reconcile:alive", owner_id=r.owner_id, fencing_token=r.fencing_token)
-    result = await areconcile.reconcile("async:rec:reconcile:alive", owner_id=r.owner_id, fencing_token=r.fencing_token)
-    assert result.success is False
-
-@pytest.mark.asyncio
-async def test_async_reconcile_fails_wrong_token(aconn, areconcile):
-    r = await acquire(aconn, "async:rec:reconcile:bad_token", ttl_ms=100, hard_ttl_ms=10000)
-    await start_execution(aconn, "async:rec:reconcile:bad_token", owner_id=r.owner_id, fencing_token=r.fencing_token)
-    time.sleep(0.2)
-    result = await areconcile.reconcile("async:rec:reconcile:bad_token", owner_id=r.owner_id, fencing_token=r.fencing_token + 999)
+    result = await areconcile.reconcile("async:rec:reconcile:alive")
     assert result.success is False
 
 # ─── FORCE COMPLETE ─────────────────────────────────────────────────────────
@@ -52,11 +44,9 @@ async def test_async_force_complete_from_reconciling(aconn, areconcile):
     r = await acquire(aconn, "async:rec:force:basic", ttl_ms=100, hard_ttl_ms=10000)
     await start_execution(aconn, "async:rec:force:basic", owner_id=r.owner_id, fencing_token=r.fencing_token)
     time.sleep(0.2)
-    await areconcile.reconcile("async:rec:force:basic", owner_id=r.owner_id, fencing_token=r.fencing_token)
+    await areconcile.reconcile("async:rec:force:basic")
     result = await areconcile.force_complete(
         "async:rec:force:basic",
-        owner_id=r.owner_id,
-        fencing_token=r.fencing_token,
         execution_result='{"value": 1}'
     )
     assert result.success is True
@@ -67,8 +57,6 @@ async def test_async_force_complete_fails_if_not_reconciling(aconn, areconcile):
     await start_execution(aconn, "async:rec:force:bad_status", owner_id=r.owner_id, fencing_token=r.fencing_token)
     result = await areconcile.force_complete(
         "async:rec:force:bad_status",
-        owner_id=r.owner_id,
-        fencing_token=r.fencing_token,
         execution_result='{"value": 1}'
     )
     assert result.success is False
@@ -80,13 +68,13 @@ async def test_async_reset_allows_rerun(aconn, areconcile):
     r = await acquire(aconn, "async:rec:reset:basic", ttl_ms=100, hard_ttl_ms=10000)
     await start_execution(aconn, "async:rec:reset:basic", owner_id=r.owner_id, fencing_token=r.fencing_token)
     time.sleep(0.2)
-    await areconcile.reconcile("async:rec:reset:basic", owner_id=r.owner_id, fencing_token=r.fencing_token)
-    result = await areconcile.reset("async:rec:reset:basic", owner_id=r.owner_id, fencing_token=r.fencing_token)
+    await areconcile.reconcile("async:rec:reset:basic")
+    result = await areconcile.reset("async:rec:reset:basic")
     assert result.success is True
 
 @pytest.mark.asyncio
 async def test_async_reset_fails_if_not_reconciling(aconn, areconcile):
     r = await acquire(aconn, "async:rec:reset:bad_status", ttl_ms=5000, hard_ttl_ms=10000)
     await start_execution(aconn, "async:rec:reset:bad_status", owner_id=r.owner_id, fencing_token=r.fencing_token)
-    result = await areconcile.reset("async:rec:reset:bad_status", owner_id=r.owner_id, fencing_token=r.fencing_token)
+    result = await areconcile.reset("async:rec:reset:bad_status")
     assert result.success is False

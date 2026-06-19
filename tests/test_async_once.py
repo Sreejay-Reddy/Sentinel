@@ -110,41 +110,6 @@ async def test_async_once_second_caller_after_failure_sees_uncertain():
     assert r2.uncertain is True
     assert r2.execution_alive is False
 
-# ─── RECONCILE VIA ONCE ─────────────────────────────────────────────────────
-
-@pytest.mark.asyncio
-async def test_async_once_uncertain_exposes_reconcile(asentinel):
-    async def boom():
-        raise ValueError("intentional")
-    result = await asentinel.once("async:once:reconcile_exposed", fn=boom, ttl_ms=5000, hard_ttl_ms=10000)
-    assert result.uncertain is True
-    assert result.reconcile is not None
-    assert isinstance(result.reconcile, AsyncReconcile)
-
-@pytest.mark.asyncio
-async def test_async_once_execution_alive_no_reconcile():
-    ready = asyncio.Event()
-    results = {}
-
-    async def slow_fn():
-        ready.set()
-        await asyncio.sleep(0.5)
-        return {"done": True}
-
-    async def run_first():
-        s = AsyncSentinel(get_conn=get_async_conn)
-        results["first"] = await s.once("async:once:alive", fn=slow_fn, ttl_ms=5000, hard_ttl_ms=10000)
-
-    async def run_second():
-        await ready.wait()
-        await asyncio.sleep(0.05)
-        s = AsyncSentinel(get_conn=get_async_conn)
-        results["second"] = await s.once("async:once:alive", fn=slow_fn, ttl_ms=5000, hard_ttl_ms=10000)
-
-    await asyncio.gather(run_first(), run_second())
-    assert results["second"].execution_alive is True
-    assert results["second"].reconcile is None
-
 # ─── NAMESPACE ──────────────────────────────────────────────────────────────
 
 @pytest.mark.asyncio
