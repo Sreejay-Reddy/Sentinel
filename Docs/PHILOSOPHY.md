@@ -240,6 +240,29 @@ The `claimed` → `executing` transition is the important one. Before that bound
 
 ---
 
+## Inspecting Execution State
+
+At any point you can inspect the current state of a key directly:
+
+```python
+result = sentinel.inspect("payments:charge:123")
+
+if result is None:
+    print("No lease found for this key")
+else:
+    print(result.status)           # claimed, executing, completed, reconciling
+    print(result.lease_alive)      # whether the lease is still valid
+    print(result.lease_expires_at)
+    print(result.hard_expires_at)
+    print(result.execution_result) # set once completed
+```
+
+This is useful for debugging uncertain outcomes, monitoring long-running executions, and building observability on top of Sentinel.
+
+The `sen` CLI wraps this directly — see the CLI section in the README.
+
+---
+
 ## Reconciliation
 
 When execution ends up in an uncertain state, Sentinel gives you explicit tools to resolve it rather than forcing a guess.
@@ -252,41 +275,37 @@ if result.execution_alive:
 
 elif result.uncertain:
     # Execution truth could not be established.
-    # Reconciliation tools are exposed on this result.
-
-    result.reconcile(...) # Changes state, required before using force_complete and reset
-    result.reset(...) # Resets the state, so work can be claimed again for retries
-    result.force_complete(...) # Marks the work as completed, response object should also be passed 
+    # Use sentinel.reconcile to resolve it explicitly.
 
 else:
     return result.response
 ```
 
-Example:
-```python
-result = sentinel.once(...)
+Reconciliation tools are exposed on `sentinel.reconcile`:
 
+```python
 if result.uncertain:
-    result.reconcile()
+    sentinel.reconcile.reconcile(key)
 
     # Verify downstream system.
     payment_exists = check_payment()
 
     if payment_exists:
-        result.force_complete(
-            response={"ok": True}
+        sentinel.reconcile.force_complete(
+            key,
+            execution_result={"ok": True}
         )
     else:
-        result.reset()
+        sentinel.reconcile.reset(key)
 ```
 
 The typical reconciliation pattern:
 
 1. Detect `result.uncertain` on a result
-2. Use `reconcile` to start reconciliation
-3. Check your downstream system (did the payment go through?)
+2. Call `sentinel.reconcile.reconcile(key)` to enter recovery mode
+3. Check your downstream system — did the payment go through?
 4. If yes: `force_complete` with the known result
-5. If no or unknown: `reset` and let it retry
+5. If no or unknown: `reset` and let it be claimed again
 
 This is more work than a silent retry. It's also the only approach that doesn't risk charging a customer twice.
 

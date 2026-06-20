@@ -16,6 +16,8 @@ Sentinel's primary interface is `once()`, which coordinates execution across com
 pip install sentinel-coordination
 ```
 
+![Sentinel CLI](assets/demo.gif)
+
 Requires Python 3.9+ and a PostgreSQL database.
 
 ---
@@ -47,6 +49,27 @@ sentinel = Sentinel(
     get_conn=get_conn,
     default_ttl_ms=3000
 )
+```
+
+---
+
+## CLI
+
+Sentinel ships with `sen`, a command-line tool for inspecting lease state directly from your terminal.
+
+![Sentinel CLI](assets/demo.gif)
+
+### Inspect a lease
+
+```bash
+sen inspect <key>
+```
+
+`sen` reads `DATABASE_URL` from your environment or a `.env` file automatically.
+
+```bash
+export DATABASE_URL=postgresql://user:password@localhost/mydb
+sen inspect <key>
 ```
 
 ---
@@ -90,6 +113,7 @@ if result.execution_alive:
 elif result.uncertain:
     # Execution truth could not be established.
     # Use reconciliation tooling if needed.
+    # Reconciallition tooling documentation is in Docs/philosophy.md 
 
 else:
     # If execution_alive and uncertain are both False,

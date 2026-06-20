@@ -1,6 +1,6 @@
 [project]
 name = "sentinel-coordination"
-version = "0.4.0"
+version = "0.4.1"
 description = "PostgreSQL-backed execution coordination primitive for correctness-sensitive distributed work."
 authors = [
   { name = "Sreejay Reddy", email = "reddysreejay@gmail.com" }
