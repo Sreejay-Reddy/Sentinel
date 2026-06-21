@@ -1,30 +1,18 @@
 import time
 import threading
 import pytest
-import psycopg
 from sentinel import Sentinel
+from sentinel.heartbeat import HeartbeatManager
 
-DB_URL = "postgresql://postgres:postgres@172.22.0.1/sentinel_test"
 
-def get_conn():
-    return psycopg.connect(DB_URL)
-
-@pytest.fixture(autouse=True)
-def clean_db():
-    conn = get_conn()
-    with conn.cursor() as cur:
-        cur.execute("DELETE FROM sentinel_leases WHERE key LIKE 'hb-test-%'")
-    conn.commit()
-    conn.close()
-
-def make_sentinel():
-    return Sentinel(get_conn=get_conn, default_ttl_ms=3000)
+def make_sentinel(get_conn_fixture):
+    return Sentinel(get_conn=get_conn_fixture, default_ttl_ms=3000)
 
 
 # --- Single task heartbeat ---
 
-def test_heartbeat_extends_lease():
-    sentinel = make_sentinel()
+def test_heartbeat_extends_lease(get_conn_fixture):
+    sentinel = make_sentinel(get_conn_fixture)
     lease_times = []
 
     def slow_fn():
@@ -32,7 +20,7 @@ def test_heartbeat_extends_lease():
         return {"ok": True}
 
     def poll():
-        conn = get_conn()
+        conn = get_conn_fixture()
         for _ in range(3):
             time.sleep(2)
             with conn.cursor() as cur:
@@ -65,8 +53,8 @@ def test_heartbeat_extends_lease():
 
 # --- Batched heartbeat across multiple tasks ---
 
-def test_batched_heartbeat_multiple_tasks():
-    sentinel = make_sentinel()
+def test_batched_heartbeat_multiple_tasks(get_conn_fixture):
+    sentinel = make_sentinel(get_conn_fixture)
     results = {}
     errors = {}
     lease_snapshots = {i: [] for i in range(4)}
@@ -92,7 +80,7 @@ def test_batched_heartbeat_multiple_tasks():
     for t in threads:
         t.start()
 
-    conn = get_conn()
+    conn = get_conn_fixture()
     for _ in range(3):
         time.sleep(2)
         with conn.cursor() as cur:
@@ -123,9 +111,9 @@ def test_batched_heartbeat_multiple_tasks():
 
 # --- No heartbeat when hard_ttl_ms not provided ---
 
-def test_no_heartbeat_without_hard_ttl():
+def test_no_heartbeat_without_hard_ttl(get_conn_fixture):
     from sentinel.heartbeat_config import get_manager
-    sentinel = make_sentinel()
+    sentinel = make_sentinel(get_conn_fixture)
 
     def fast_fn():
         return {"ok": True}
@@ -142,10 +130,8 @@ def test_no_heartbeat_without_hard_ttl():
 
 # --- Lazy thread initialization ---
 
-def test_lazy_thread_init():
-    from sentinel.heartbeat import HeartbeatManager
-
-    manager = HeartbeatManager(get_conn=get_conn)
+def test_lazy_thread_init(get_conn_fixture):
+    manager = HeartbeatManager(get_conn=get_conn_fixture)
     assert manager._thread is None, "Thread should not spawn before first registration"
 
     task = manager.register(key="hb-test-lazy", ttl_ms=3000, hard_ttl_ms=10000)
@@ -157,11 +143,11 @@ def test_lazy_thread_init():
     assert not manager._thread.is_alive(), "Thread should exit when bucket is empty"
 
 
-# --- Heartbeat Timing gap ---
+# --- Heartbeat timing gap ---
 
-def test_heartbeat_fires_after_execution_starts(caplog):
+def test_heartbeat_fires_after_execution_starts(get_conn_fixture, caplog):
     import logging
-    sentinel = make_sentinel()
+    sentinel = make_sentinel(get_conn_fixture)
 
     def slow_fn(task_id):
         time.sleep(6)
