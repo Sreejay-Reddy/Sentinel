@@ -1,6 +1,5 @@
 from .async_core import (
     acquire,
-    heartbeat,
     start_execution,
     complete,
     expire_lease
@@ -123,14 +122,8 @@ class AsyncOnce:
 
             self._task = manager.register(
                 key=self.key,
-                fn=heartbeat,
-                args=(
-                    self.key,
-                    acquired.owner_id,
-                    acquired.fencing_token,
-                    self.ttl_ms
-                ),
-                ttl_ms=self.ttl_ms
+                ttl_ms=self.ttl_ms,
+                hard_ttl_ms=self.hard_ttl_ms
             )
 
             # Execute user function

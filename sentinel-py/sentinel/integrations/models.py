@@ -41,6 +41,10 @@ class SentinelLease(models.Model):
         default=1
     )
 
+    ttl_ms = models.IntegerField(
+        default=3000
+    )
+
     class Meta:
         db_table = "sentinel_leases"
         indexes = [

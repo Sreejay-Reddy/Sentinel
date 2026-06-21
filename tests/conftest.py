@@ -59,3 +59,18 @@ async def get_async_conn():
 @pytest.fixture
 def get_async_conn_fixture():
     return get_async_conn
+
+@pytest.fixture(autouse=True)
+def reset_heartbeat_manager():
+    from sentinel.heartbeat_config import shutdown_manager
+    shutdown_manager()
+    yield
+    shutdown_manager()
+
+@pytest.fixture(autouse=True)
+def clean_db_():
+    conn = get_conn()
+    with conn.cursor() as cur:
+        cur.execute("DELETE FROM sentinel_leases")
+    conn.commit()
+    conn.close()

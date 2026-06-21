@@ -148,6 +148,7 @@ async def complete(conn, key, *, owner_id, fencing_token, execution_result=None)
     await conn.commit()
     return OperationResult(success)
 
+# Unused since updates are batched and internally sync inside heartbeat manager [0.4.2 Changelog]
 async def heartbeat(conn, key, owner_id, fencing_token, ttl_ms=5000):
     async with conn.cursor() as cur:
         await cur.execute("""

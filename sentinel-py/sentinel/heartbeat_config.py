@@ -12,12 +12,14 @@ def get_manager(get_conn=None, owns_connection=True):
 
     if _manager is None:
         with _lock:
-            if _manager is None: 
-                    if get_conn is None:
-                        raise ValueError("get_conn required for first initialization")
-                    
-                    _manager = HeartbeatManager(get_conn=get_conn, owns_connection=owns_connection, num_threads=3)
-                    _manager.start()
+            if _manager is None:
+                if get_conn is None:
+                    raise ValueError("get_conn required for first initialization")
+
+                _manager = HeartbeatManager(
+                    get_conn=get_conn,
+                    owns_connection=owns_connection
+                )
 
     return _manager
 

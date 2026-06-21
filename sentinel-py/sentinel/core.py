@@ -18,7 +18,8 @@ def acquire(conn, key, *, owner_id=None, ttl_ms=10000, hard_ttl_ms = None):
             lease_expires_at,
             lease_updated_at,
             hard_expires_at,
-            fencing_token
+            fencing_token,
+            ttl_ms
         )
         VALUES (
             %s,
@@ -26,7 +27,8 @@ def acquire(conn, key, *, owner_id=None, ttl_ms=10000, hard_ttl_ms = None):
             NOW() + (%s * INTERVAL '1 millisecond'),
             NOW(),
             NOW() + (%s * INTERVAL '1 millisecond'),
-            nextval('sentinel_token_seq')
+            nextval('sentinel_token_seq'),
+            %s
         )
         ON CONFLICT (key)
         DO UPDATE
@@ -35,10 +37,11 @@ def acquire(conn, key, *, owner_id=None, ttl_ms=10000, hard_ttl_ms = None):
             lease_expires_at = EXCLUDED.lease_expires_at,
             lease_updated_at = NOW(),
             hard_expires_at = EXCLUDED.hard_expires_at,
-            fencing_token = nextval('sentinel_token_seq')
+            fencing_token = nextval('sentinel_token_seq'),
+            ttl_ms = EXCLUDED.ttl_ms
         WHERE sentinel_leases.lease_expires_at < NOW() AND sentinel_leases.status = 'claimed'
         RETURNING owner_id, lease_expires_at, fencing_token, status, lease_expires_at > NOW() AS lease_alive;
-        """, (key, owner_id, ttl_ms, hard_ttl_ms))
+        """, (key, owner_id, ttl_ms, hard_ttl_ms, ttl_ms))
 
         result = cur.fetchone()
 
@@ -165,6 +168,23 @@ def heartbeat(conn, key, owner_id, fencing_token, ttl_ms=5000):
 
     conn.commit()
     return OperationResult(success)
+
+def batch_heartbeat(conn, keys):
+    with conn.cursor() as cur:
+        cur.execute("""
+        UPDATE sentinel_leases
+        SET lease_expires_at = NOW() + (ttl_ms * INTERVAL '1 millisecond'),
+            lease_updated_at = NOW()
+        WHERE key = ANY(%s)
+            AND hard_expires_at > NOW()
+            AND status = 'executing'
+        RETURNING key;
+        """, (keys,))
+
+        updated_keys = [row[0] for row in cur.fetchall()]
+
+    conn.commit()
+    return updated_keys
 
 def expire_lease(conn, key, *, owner_id, fencing_token):
     with conn.cursor() as cur:
