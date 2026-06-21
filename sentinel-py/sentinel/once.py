@@ -1,6 +1,5 @@
 from .core import (
     acquire,
-    heartbeat,
     start_execution,
     complete,
     expire_lease
@@ -119,19 +118,14 @@ class Once:
                     status=started.status
                 )
             
-            manager = get_manager()
+            if self.hard_ttl_ms:
+                manager = get_manager()
 
-            self._task = manager.register(
-                key=self.key,
-                fn=heartbeat,
-                args=(
-                    self.key,
-                    acquired.owner_id,
-                    acquired.fencing_token,
-                    self.ttl_ms
-                ),
-                ttl_ms=self.ttl_ms
-            )
+                self._task = manager.register(
+                    key=self.key,
+                    ttl_ms=self.ttl_ms,
+                    hard_ttl_ms=self.hard_ttl_ms
+                )
 
             # Execute user function
             try:

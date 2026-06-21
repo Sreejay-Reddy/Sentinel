@@ -9,7 +9,8 @@ CREATE TABLE IF NOT EXISTS sentinel_leases (
     hard_expires_at TIMESTAMP,
     execution_result JSONB,
     status TEXT NOT NULL DEFAULT 'claimed' CHECK (status IN ('claimed','executing','completed','reconciling')),
-    fencing_token BIGINT NOT NULL DEFAULT 1
+    fencing_token BIGINT NOT NULL DEFAULT 1,
+    ttl_ms INTEGER NOT NULL DEFAULT 3000
 );
 
 CREATE INDEX IF NOT EXISTS idx_sentinel_expiry

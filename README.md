@@ -16,7 +16,7 @@ Sentinel's primary interface is `once()`, which coordinates execution across com
 pip install sentinel-coordination
 ```
 
-![Sentinel CLI](assets/demo.gif)
+![Sentinel CLI](https://raw.githubusercontent.com/Sreejay-Reddy/Sentinel/main/assets/demo.gif)
 
 Requires Python 3.9+ and a PostgreSQL database.
 
@@ -57,7 +57,7 @@ sentinel = Sentinel(
 
 Sentinel ships with `sen`, a command-line tool for inspecting lease state directly from your terminal.
 
-![Sentinel CLI](assets/demo.gif)
+![Sentinel CLI](https://raw.githubusercontent.com/Sreejay-Reddy/Sentinel/main/assets/demo.gif)
 
 ### Inspect a lease
 
