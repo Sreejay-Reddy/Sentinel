@@ -1,13 +1,13 @@
 [project]
 name = "sentinel-coordination"
-version = "0.4.1"
+version = "0.5.0"
 description = "PostgreSQL-backed execution coordination primitive for correctness-sensitive distributed work."
 authors = [
   { name = "Sreejay Reddy", email = "reddysreejay@gmail.com" }
 ]
 readme = "README.md"
 requires-python = ">=3.9"
-dependencies = ["psycopg[binary]"]
+dependencies = ["psycopg[binary]", "python-dotenv"]
 
 keywords = [
   "postgresql",
@@ -16,7 +16,10 @@ keywords = [
   "execution-coordination",
   "fault-tolerance",
   "concurrency",
-  "fencing-tokens"
+  "fencing-tokens",
+  "append-only log", 
+  "execution history", 
+  "audit log"
 ]
 
 classifiers = [
@@ -40,7 +43,6 @@ sen = "sentinel.cli:main"
 
 [project.optional-dependencies]
 django = ["django>=4.2"]
-cli = ["python-dotenv"]
 
 [build-system]
 requires = ["setuptools>=61.0"]

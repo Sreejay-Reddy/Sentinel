@@ -63,6 +63,7 @@ Sentinel ships with `sen`, a command-line tool for inspecting lease state direct
 
 ```bash
 sen inspect <key>
+sen history <key> --limit 20
 ```
 
 `sen` reads `DATABASE_URL` from your environment or a `.env` file automatically.
@@ -102,6 +103,8 @@ result = sentinel.once(
 )
 ```
 
+---
+
 ### Reading the result
 
 ```python
@@ -121,6 +124,29 @@ else:
     # or a cached result from a previous execution.
     return result.response
 ```
+
+---
+
+## Execution History
+
+Sentinel records every state transition to an append-only event log. Every acquire, rejection, execution start, completion, expiry, and reconciliation is written atomically with the lease change that caused it.
+
+```bash
+sen history <key>
+sen history <key> --limit 20
+```
+
+Example output:
+History for key: payment-order-789  (3 events)
+2026-06-27 14:02:01  acquired      token=42  owner=worker-a
+2026-06-27 14:02:01  executing     token=42  owner=worker-a
+2026-06-27 14:02:03  completed     token=42  owner=worker-a
+
+### What the event log tells you
+
+The sequence of events is the ground truth for what happened to any execution key. A `reconciling` event followed by `acquired` means a new worker took over. A `reconciling` event followed by `completed` means the original worker finished inside the uncertainty window. An `expired` event means the worker raised an exception and the lease was collapsed immediately.
+
+The log does not resolve uncertainty — it records it honestly.
 
 ---
 
@@ -254,7 +280,6 @@ The core execution semantics are stable as of 0.4.0. Reconciliation tooling and 
 ## Roadmap
 
 - Redis cache for better throughput 
-- Append-only execution event log (`sentinel_events`)
 - FastAPI integration
 - Correlate — cross-service execution observability
 - Stronger reconciliation tooling

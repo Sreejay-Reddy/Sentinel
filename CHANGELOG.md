@@ -5,6 +5,22 @@ The format loosely follows Keep a Changelog.
 
 ---
 
+## 0.5.0 — 2026-06-27
+
+### Added
+- **`sentinel_events` append-only event log** — new table recording every state transition with `key`, `event`, `owner_id`, `fencing_token`, `metadata`, and `occurred_at`. Indexed on `(key, occurred_at, fencing_token)` for efficient history queries.
+- **`write_event` / `async_write_event`** — internal helpers that write events atomically within the same transaction as each state transition. Events and lease changes commit together or not at all.
+- **`SentinelEvent` enum** — typed event constants (`ACQUIRED`, `REJECTED`, `EXECUTING`, `COMPLETED`, `EXPIRED`, `RECONCILING`, `RESET`, `RELEASED`) used across sync and async paths.
+- **`history(conn, key, *, limit=50)`** — query the event log for any key, returns a list of `EventRecord` dataclasses ordered oldest first.
+- **`sen history <key>`** — CLI command to print the full execution history for a key directly from the terminal. Accepts `--limit` to cap results.
+- **Fencing token rotation on reconciliation** — `reconcile()` now issues a new fencing token via `nextval('sentinel_token_seq')` at the moment it transitions a lease to `reconciling`. The original worker's token is immediately invalidated.
+- **`RESET` and `RELEASED` events** — explicit events written when a lease is reset by the reconciler or explicitly released by the caller.
+
+### Changed
+- `TIMESTAMPTZ` replaces `TIMESTAMP` across all lease columns for correct timezone-aware behaviour in distributed environments.
+
+---
+
 ## 0.4.2 — 2026-06-21
 
 ### Added

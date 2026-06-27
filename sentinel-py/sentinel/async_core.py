@@ -1,6 +1,7 @@
 import json
 from .utils import get_owner_id, row_to_dict
 from .result import AcquireResult, OperationResult, InspectResult
+from .events import SentinelEvent, async_write_event
 
 async def acquire(conn, key, *, owner_id=None, ttl_ms=10000, hard_ttl_ms = None):
 
@@ -44,6 +45,7 @@ async def acquire(conn, key, *, owner_id=None, ttl_ms=10000, hard_ttl_ms = None)
 
         if result is not None:
             row = row_to_dict(cur, result)
+            await async_write_event(cur, key, SentinelEvent.ACQUIRED, owner_id=row["owner_id"], fencing_token=row["fencing_token"])            
 
     await conn.commit()
 
@@ -71,6 +73,7 @@ async def acquire(conn, key, *, owner_id=None, ttl_ms=10000, hard_ttl_ms = None)
 
         if result is not None:
             row = row_to_dict(cur, result)
+            await async_write_event(cur, key, SentinelEvent.REJECTED, owner_id=row["owner_id"], fencing_token=row["fencing_token"])
     
     await conn.commit()
 
@@ -102,6 +105,7 @@ async def start_execution(conn, key, *, owner_id, fencing_token):
         success = result is not None
         if result is not None:
             row = row_to_dict(cur, result)
+            await async_write_event(cur, key, SentinelEvent.EXECUTING, owner_id=owner_id, fencing_token=fencing_token)
     
     await conn.commit()
     if row is None:
@@ -118,6 +122,8 @@ async def release(conn, key, *, owner_id, fencing_token):
         """, (key, owner_id, fencing_token))
 
         success = await cur.fetchone() is not None
+        if success:
+            await async_write_event(cur, key, SentinelEvent.RELEASED, owner_id=owner_id, fencing_token=fencing_token)
 
     await conn.commit()
     return OperationResult(success)
@@ -144,7 +150,8 @@ async def complete(conn, key, *, owner_id, fencing_token, execution_result=None)
         """, (serialized_result, key, owner_id, fencing_token))
 
         success = await cur.fetchone() is not None
-
+        if success:
+            await async_write_event(cur, key, SentinelEvent.COMPLETED, owner_id=owner_id, fencing_token=fencing_token)
     await conn.commit()
     return OperationResult(success)
 
@@ -180,6 +187,8 @@ async def expire_lease(conn, key, *, owner_id, fencing_token):
         RETURNING 1;
         """, (key, owner_id, fencing_token))
         success = await cur.fetchone() is not None
+        if success:
+            await async_write_event(cur, key, SentinelEvent.EXPIRED, owner_id=owner_id, fencing_token=fencing_token)
     await conn.commit()
     return OperationResult(success)
 

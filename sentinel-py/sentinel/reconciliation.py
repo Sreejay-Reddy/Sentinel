@@ -1,4 +1,5 @@
 from sentinel.result import OperationResult
+from .events import SentinelEvent, write_event
 
 
 class Reconcile:
@@ -15,7 +16,8 @@ class Reconcile:
                 UPDATE sentinel_leases
                 SET
                     status = 'reconciling',
-                    lease_updated_at = NOW()
+                    lease_updated_at = NOW(),
+                    fencing_token = nextval('sentinel_token_seq')
                 WHERE key = %s
                   AND status = 'executing'
                   AND lease_expires_at < NOW()
@@ -23,6 +25,8 @@ class Reconcile:
                 """, (key,))
 
                 success = cur.fetchone() is not None
+                if success:
+                    write_event(cur, key, SentinelEvent.RECONCILING)
 
             conn.commit()
 
@@ -48,6 +52,8 @@ class Reconcile:
                 """, (execution_result, key))
 
                 success = cur.fetchone() is not None
+                if success:
+                    write_event(cur, key, SentinelEvent.COMPLETED)
 
             conn.commit()
 
@@ -72,7 +78,8 @@ class Reconcile:
                 """, (key,))
 
                 success = cur.fetchone() is not None
-
+                if success:
+                    write_event(cur, key, SentinelEvent.RESET)
             conn.commit()
 
             return OperationResult(success)

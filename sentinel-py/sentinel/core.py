@@ -1,6 +1,7 @@
 import json
 from .utils import get_owner_id, row_to_dict
 from .result import AcquireResult, OperationResult, InspectResult
+from .events import SentinelEvent, write_event
 
 def acquire(conn, key, *, owner_id=None, ttl_ms=10000, hard_ttl_ms = None):
 
@@ -47,6 +48,7 @@ def acquire(conn, key, *, owner_id=None, ttl_ms=10000, hard_ttl_ms = None):
 
         if result is not None:
             row = row_to_dict(cur, result)
+            write_event(cur, key, SentinelEvent.ACQUIRED, owner_id=row["owner_id"], fencing_token=row["fencing_token"])
 
     conn.commit()
 
@@ -74,6 +76,8 @@ def acquire(conn, key, *, owner_id=None, ttl_ms=10000, hard_ttl_ms = None):
 
         if result is not None:
             row = row_to_dict(cur, result)
+            write_event(cur, key, SentinelEvent.REJECTED, owner_id=row["owner_id"], fencing_token=row["fencing_token"])
+
     
     conn.commit()
 
@@ -105,6 +109,8 @@ def start_execution(conn, key, *, owner_id, fencing_token):
         success = result is not None
         if result is not None:
             row = row_to_dict(cur, result)
+            write_event(cur, key, SentinelEvent.EXECUTING, owner_id=owner_id, fencing_token=fencing_token)
+
     
     conn.commit()
     if row is None:
@@ -121,6 +127,8 @@ def release(conn, key, *, owner_id, fencing_token):
         """, (key, owner_id, fencing_token))
 
         success = cur.fetchone() is not None
+        if success:
+            write_event(cur, key, SentinelEvent.RELEASED, owner_id=owner_id, fencing_token=fencing_token)       
 
     conn.commit()
     return OperationResult(success)
@@ -147,6 +155,8 @@ def complete(conn, key, *, owner_id, fencing_token, execution_result=None):
         """, (serialized_result, key, owner_id, fencing_token))
 
         success = cur.fetchone() is not None
+        if success:
+            write_event(cur, key, SentinelEvent.COMPLETED, owner_id=owner_id, fencing_token=fencing_token)
 
     conn.commit()
     return OperationResult(success)
@@ -199,6 +209,9 @@ def expire_lease(conn, key, *, owner_id, fencing_token):
         RETURNING 1;
         """, (key, owner_id, fencing_token))
         success = cur.fetchone() is not None
+        if success:
+            write_event(cur, key, SentinelEvent.EXPIRED, owner_id=owner_id, fencing_token=fencing_token)
+
     conn.commit()
     return OperationResult(success)
 

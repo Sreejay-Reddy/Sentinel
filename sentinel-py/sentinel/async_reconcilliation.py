@@ -1,4 +1,5 @@
 from sentinel.result import OperationResult
+from .events import SentinelEvent, async_write_event
 
 
 class AsyncReconcile:
@@ -15,7 +16,8 @@ class AsyncReconcile:
                 UPDATE sentinel_leases
                 SET
                     status = 'reconciling',
-                    lease_updated_at = NOW()
+                    lease_updated_at = NOW(),
+                    fencing_token = nextval('sentinel_token_seq')
                 WHERE key = %s
                   AND status = 'executing'
                   AND lease_expires_at < NOW()
@@ -23,7 +25,8 @@ class AsyncReconcile:
                 """, (key,))
 
                 success = await cur.fetchone() is not None
-
+                if success:
+                    await async_write_event(cur, key, SentinelEvent.RECONCILING)
             await conn.commit()
 
             return OperationResult(success)
@@ -48,7 +51,8 @@ class AsyncReconcile:
                 """, (execution_result, key))
 
                 success = await cur.fetchone() is not None
-
+                if success:
+                    await async_write_event(cur, key, SentinelEvent.COMPLETED)
             await conn.commit()
 
             return OperationResult(success)
@@ -72,7 +76,8 @@ class AsyncReconcile:
                 """, (key,))
 
                 success = await cur.fetchone() is not None
-
+                if success:
+                    await async_write_event(cur, key, SentinelEvent.RESET)
             await conn.commit()
 
             return OperationResult(success)
