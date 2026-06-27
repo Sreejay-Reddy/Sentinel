@@ -53,3 +53,48 @@ class SentinelLease(models.Model):
                 name="idx_sentinel_expiry"
             )
         ]
+
+class SentinelEvent(models.Model):
+    class Event(models.TextChoices):
+        ACQUIRED = "acquired", "Acquired"
+        REJECTED = "rejected", "Rejected"
+        EXECUTING = "executing", "Executing"
+        COMPLETED = "completed", "Completed"
+        EXPIRED = "expired", "Expired"
+        RECONCILING = "reconciling", "Reconciling"
+
+    id = models.BigAutoField(primary_key=True)
+
+    key = models.TextField()
+
+    event = models.CharField(
+        max_length=32,
+        choices=Event.choices,
+    )
+
+    occurred_at = models.DateTimeField()
+
+    fencing_token = models.BigIntegerField(
+        null=True,
+        blank=True,
+    )
+
+    owner_id = models.TextField(
+        null=True,
+        blank=True,
+    )
+
+    class Meta:
+        db_table = "sentinel_events"
+
+        indexes = [
+            models.Index(
+                fields=["key", "occurred_at", "fencing_token"],
+                name="idx_sentinel_events",
+            )
+        ]
+
+        ordering = ["occurred_at", "id"]
+
+    def __str__(self):
+        return f"{self.key} [{self.event}]"

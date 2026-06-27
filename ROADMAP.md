@@ -47,10 +47,9 @@ The focus is to keep the core small, explicit, and reliable rather than continuo
 
 ## Near Term (0.5.0)
 
-- [ ] `sentinel_events` append-only event log written in the same transaction as state transitions
-- [ ] FastAPI integration after async core stabilizes
-- [ ] Expanded test coverage for edge cases and contention scenarios
-- [ ] Improved examples and integration guides
+- [x] `sentinel_events` append-only event log written in the same transaction as state transitions
+- [x] Expanded test coverage for edge cases and contention scenarios
+- [x] Improved examples and integration guides
 
 ---
 
@@ -59,6 +58,7 @@ The focus is to keep the core small, explicit, and reliable rather than continuo
 These are ideas being explored and are not guaranteed.
 
 - [ ] Correlate — separate OSS library that reads `sentinel_events` for cross-service execution observability
+- [ ] FastAPI integration after async core stabilizes
 - [ ] Batched adaptive heartbeats — bucket-level batch `UPDATE` with adaptive interval
 - [ ] Additional framework adapters (Flask, Starlette)
 - [ ] Embeddable reconciliation dashboard

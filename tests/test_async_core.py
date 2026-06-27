@@ -13,13 +13,6 @@ from sentinel.async_core import (
     inspect,
 )
 
-DSN = "postgresql://sentinel_test:sentinel_test@localhost/sentinel_test"
-
-@pytest_asyncio.fixture
-async def aconn():
-    conn = await psycopg.AsyncConnection.connect(DSN)
-    yield conn
-    await conn.close()
 
 # ─── ACQUIRE ────────────────────────────────────────────────────────────────
 

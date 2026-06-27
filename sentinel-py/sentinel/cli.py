@@ -9,6 +9,7 @@ except ImportError:
     pass
 
 from .core import inspect
+from .events import history
 
 def get_conn():
     db_url = os.environ.get("DATABASE_URL")
@@ -26,11 +27,15 @@ def main():
     inspect_parser = subparsers.add_parser("inspect", help="Inspect a lease by key")
     inspect_parser.add_argument("key", type=str)
 
+    history_parser = subparsers.add_parser("history", help="Show execution history for a key")
+    history_parser.add_argument("key", type=str)
+    history_parser.add_argument("--limit", type=int, default=50, help="Max events to show (default: 50)")
+
     args = parser.parse_args()
 
     if args.command == "inspect":
-        conn = get_conn()
-        result = inspect(conn, args.key)
+        with get_conn() as conn:
+            result = inspect(conn, args.key)
 
         if result is None:
             print(f"No lease found for key: {args.key}")
@@ -43,6 +48,18 @@ def main():
             print(f"lease_updated_at: {result.lease_updated_at}")
             print(f"hard_expires_at:  {result.hard_expires_at}")
             print(f"execution_result: {result.execution_result}")
+
+    elif args.command == "history":
+        with get_conn() as conn:
+            events = history(conn, args.key, limit=args.limit)
+
+        if not events:
+            print(f"No history found for key: {args.key}")
+        else:
+            print(f"History for key: {args.key}  ({len(events)} events)\n")
+            for e in events:
+                print(f"  {e}")
+
     else:
         parser.print_help()
 

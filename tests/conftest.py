@@ -1,5 +1,6 @@
 import pytest
 import asyncio
+import pytest_asyncio
 import sys
 import psycopg
 from sentinel import init_db
@@ -16,6 +17,7 @@ def clean_db(conn):
     with conn.cursor() as cur:
         cur.execute("DELETE FROM sentinel_leases;")
         cur.execute("ALTER SEQUENCE sentinel_token_seq RESTART WITH 1;")
+        cur.execute("DELETE FROM sentinel_events;")
     conn.commit()
 
 
@@ -74,3 +76,9 @@ def clean_db_():
         cur.execute("DELETE FROM sentinel_leases")
     conn.commit()
     conn.close()
+
+@pytest_asyncio.fixture
+async def aconn():
+    conn = await psycopg.AsyncConnection.connect(DSN)
+    yield conn
+    await conn.close()

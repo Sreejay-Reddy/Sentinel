@@ -11,12 +11,6 @@ async def get_async_conn():
     return await psycopg.AsyncConnection.connect(DSN)
 
 @pytest_asyncio.fixture
-async def aconn():
-    conn = await psycopg.AsyncConnection.connect(DSN)
-    yield conn
-    await conn.close()
-
-@pytest_asyncio.fixture
 async def areconcile():
     return AsyncReconcile(get_conn=get_async_conn)
 
